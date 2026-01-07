@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h2>Pay with M-Pesa</h2>
+    <input type="text" id="phone" placeholder="254712345678">
+    <button onclick="sendMoney()">Pay KES 10</button>
+
+    <p id="status"></p>
+
+    <script>
+        async function sendMoney() {
+            const phoneNum = document.getElementById('phone').value;
+            document.getElementById('status').innerText = "Sending prompt...";
+
+            // This talks to your 'app.py' brain
+            const response = await fetch('/pay', {
+                method: 'POST',
+                
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ phone: phoneNum })
+            });
+
+            alert("Check your phone for the PIN prompt!");
+        }
+    </script>
+</body>
+</html>
